@@ -9,27 +9,30 @@
     <style>
         :root { --primary: #2c3e50; --sec: #3498db; --bg: #f0f2f5; }
         body { background-color: var(--bg); font-family: 'Segoe UI', sans-serif; }
+        
+        /* Navbar y Estilos Generales */
         .navbar { background-color: var(--primary); box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .card { border: none; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-radius: 8px; margin-bottom: 1rem; }
         .card-header { font-weight: bold; color: white; }
         
-        /* Colores de Cabeceras por Zona */
-        .bg-zona { background-color: #6c757d; }
+        /* Colores Específicos de Zona */
+        .bg-zona { background-color: #6c757d; } /* Gris para cabeceras de zona */
         
-        /* KPIs Cards */
+        /* Tarjetas de KPIs */
         .kpi-card { padding: 1.5rem; border-radius: 10px; color: white; text-align: center; transition: transform 0.2s; }
         .kpi-card:hover { transform: translateY(-3px); }
-        .bg-kpi-1 { background: linear-gradient(135deg, #667eea, #764ba2); }
-        .bg-kpi-2 { background: linear-gradient(135deg, #2af598, #009efd); }
-        .bg-kpi-3 { background: linear-gradient(135deg, #ff9a9e, #fecfef); color: #444; }
-        .bg-kpi-4 { background: linear-gradient(135deg, #f6d365, #fda085); color: #444; }
-        .bg-kpi-5 { background: linear-gradient(135deg, #84fab0, #8fd3f4); color: #444; }
+        .bg-kpi-1 { background: linear-gradient(135deg, #667eea, #764ba2); } /* OTIF */
+        .bg-kpi-2 { background: linear-gradient(135deg, #2af598, #009efd); } /* Fill Rate */
+        .bg-kpi-3 { background: linear-gradient(135deg, #ff9a9e, #fecfef); color: #444; } /* Backlog */
+        .bg-kpi-4 { background: linear-gradient(135deg, #f6d365, #fda085); color: #444; } /* Picking */
+        .bg-kpi-5 { background: linear-gradient(135deg, #84fab0, #8fd3f4); color: #444; } /* Flota */
         
+        /* Navegación y Tablas */
         .nav-pills .nav-link.active { background-color: var(--sec); }
-        .loading-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.9); z-index: 9999; display: flex; justify-content: center; align-items: center; flex-direction: column; }
-        
-        /* Tablas */
         .table-hover tbody tr:hover { background-color: rgba(52, 152, 219, 0.1); }
+        
+        /* Loading Overlay */
+        .loading-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.95); z-index: 9999; display: flex; justify-content: center; align-items: center; flex-direction: column; }
     </style>
 </head>
 <body>
@@ -40,7 +43,7 @@
             <div class="d-flex align-items-center">
                 <div class="input-group me-3" id="diaSelectorContainer" style="display:none;">
                     <span class="input-group-text bg-light border-0"><i class="fas fa-calendar-day"></i></span>
-                    <select class="form-select" id="diaSelector" style="max-width: 150px;"></select>
+                    <select class="form-select" id="diaSelector" style="max-width: 150px; cursor: pointer;"></select>
                 </div>
                 <button class="btn btn-outline-light btn-sm" onclick="resetApp()">Nueva Simulación</button>
             </div>
@@ -91,7 +94,7 @@
                     </div>
                     
                     <div class="card border-danger border-start border-4">
-                        <div class="card-header bg-white text-danger border-bottom-0"><i class="fas fa-bell"></i> ALERTAS DETECTADAS</div>
+                        <div class="card-header bg-white text-danger border-bottom-0"><i class="fas fa-bell"></i> ALERTAS DEL DÍA</div>
                         <div class="card-body pt-0" id="alertasContainer"></div>
                     </div>
                 </div>
@@ -102,11 +105,21 @@
 
                 <div class="tab-pane fade" id="tabInventario">
                     <div class="card">
-                        <div class="card-header bg-dark">Control de Stock y Reposición</div>
-                        <div class="card-body">
-                            <table class="table table-bordered align-middle">
+                        <div class="card-header bg-dark">Balance de Inventario Diario</div>
+                        <div class="card-body table-responsive">
+                            <table class="table table-bordered align-middle text-center">
                                 <thead class="table-light">
-                                    <tr><th>SKU</th><th>Producto</th><th>U.M.</th><th>Stock Final</th><th>Punto Repo.</th><th>Estado</th></tr>
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Producto</th>
+                                        <th>U.M.</th>
+                                        <th class="bg-light">Stock Inicial</th>
+                                        <th class="text-danger">Ventas</th>
+                                        <th class="text-primary">Reposición</th>
+                                        <th class="bg-light">Stock Final</th>
+                                        <th>Pto. Repo</th>
+                                        <th>Estado</th>
+                                    </tr>
                                 </thead>
                                 <tbody id="tablaInventario"></tbody>
                             </table>
@@ -114,7 +127,7 @@
                     </div>
                     <div class="card mt-3 bg-light">
                         <div class="card-body">
-                            <h6 class="card-title"><i class="fas fa-truck-loading"></i> Bitácora de Abastecimiento (Entradas del día)</h6>
+                            <h6 class="card-title"><i class="fas fa-truck-loading"></i> Bitácora de Abastecimiento (Entradas nocturnas)</h6>
                             <ul id="listaReposiciones" class="list-group list-group-horizontal flex-wrap"></ul>
                         </div>
                     </div>
@@ -126,7 +139,7 @@
 
                 <div class="tab-pane fade" id="tabTransporte">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5>Planificación de Distribución</h5>
+                        <h5>Planificación de Rutas y Vehículos</h5>
                         <span class="badge bg-success fs-5" id="costoTransporteTotal">Costo Total: S/ 0.00</span>
                     </div>
                     <div id="transporteZonasContainer" class="row"></div>
@@ -136,7 +149,7 @@
                     <button class="btn btn-success mb-3" onclick="cargarReporte()"><i class="fas fa-sync"></i> Actualizar Reporte Consolidado</button>
                     <div class="card shadow-sm">
                         <div class="card-body bg-light">
-                            <pre id="reporteTexto" style="font-family: 'Consolas', monospace; white-space: pre-wrap; font-size: 0.9rem;"></pre>
+                            <pre id="reporteTexto" style="font-family: 'Consolas', monospace; white-space: pre-wrap; font-size: 0.9rem;">Cargando reporte...</pre>
                         </div>
                     </div>
                 </div>
@@ -147,7 +160,8 @@
 
     <div id="loading" class="loading-overlay" style="display:none;">
         <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div>
-        <h4 class="mt-3 text-secondary">Procesando lógica logística...</h4>
+        <h4 class="mt-3 text-secondary">Simulando Operaciones Logísticas...</h4>
+        <small>Calculando Inventario, Rutas y KPIs</small>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -155,7 +169,8 @@
         // --- VARIABLES GLOBALES ---
         let DATOS_GLOBALES = null;
         
-        // Catálogo Estático para Visualización (Frontend)
+        // Datos estáticos para visualización (Nombres y UMs)
+        // El stock y valores dinámicos vienen del Backend
         const CATALOGO = {
             skus: { 
                 "P001": "Lápiz Labial", "P002": "Base", "P003": "Rubor", 
@@ -170,7 +185,7 @@
             }
         };
 
-        // --- 1. INICIO Y API ---
+        // --- 1. EJECUTAR SIMULACIÓN ---
         async function ejecutarSimulacion() {
             const dias = document.getElementById('diasInput').value;
             const cap = document.getElementById('capacidadInput').value;
@@ -203,7 +218,7 @@
             document.getElementById('resultadosPanel').style.display = 'block';
             document.getElementById('diaSelectorContainer').style.display = 'flex';
             
-            // Llenar selector de días ordenado
+            // Llenar selector de días
             const selector = document.getElementById('diaSelector');
             selector.innerHTML = '';
             
@@ -219,6 +234,7 @@
                 selector.appendChild(opt);
             });
 
+            // Listener para cambio de día
             selector.addEventListener('change', (e) => cargarDatosDia(e.target.value));
             
             // Cargar primer día
@@ -226,7 +242,7 @@
             cargarDatosDia(keysOrdenadas[0]);
         }
 
-        // --- 2. CARGA DE DATOS EN PANTALLA ---
+        // --- 2. CARGAR DATOS DEL DÍA SELECCIONADO ---
         function cargarDatosDia(diaKey) {
             const data = DATOS_GLOBALES[diaKey];
             const ind = data.indicadores;
@@ -250,11 +266,10 @@
                 `).join('');
             }
 
-            // B. PEDIDOS POR ZONA (DESGLOSADO LÍNEA POR LÍNEA)
+            // B. PEDIDOS POR ZONA (TABLAS DESGLOSADAS)
             const pedidosCont = document.getElementById('pedidosZonasContainer');
             pedidosCont.innerHTML = '';
             
-            // Agrupar por zona
             const pedidosPorZona = {};
             Object.entries(data.pedidos).forEach(([id, p]) => {
                 if(!pedidosPorZona[p.zona]) pedidosPorZona[p.zona] = [];
@@ -264,7 +279,7 @@
             Object.entries(pedidosPorZona).forEach(([zona, lista]) => {
                 let filas = "";
                 lista.forEach(p => {
-                    // Iterar productos del pedido para crear filas individuales
+                    // Crear fila por producto
                     Object.entries(p.productos).forEach(([sku, cantidad]) => {
                         filas += `
                         <tr>
@@ -295,22 +310,42 @@
                 </div>`;
             });
 
-            // C. INVENTARIO
+            // C. INVENTARIO (BALANCE MATEMÁTICO)
             const bodyInv = document.getElementById('tablaInventario');
             bodyInv.innerHTML = '';
-            Object.entries(data.inventario.stock_final).forEach(([sku, cant]) => {
+            
+            const stockIni = data.inventario.stock_inicial || {};
+            const ventas = data.inventario.ventas || {};
+            const stockFin = data.inventario.stock_final || {};
+            const repos = data.inventario.reposiciones || {};
+
+            Object.keys(stockIni).forEach(sku => {
+                const ini = stockIni[sku];
+                const out = ventas[sku] || 0;
+                const fin = stockFin[sku];
                 const repo = CATALOGO.repo[sku];
-                const estado = cant <= repo ? '<span class="badge bg-danger">⚠️ Reponer</span>' : '<span class="badge bg-success">OK</span>';
+                
+                // Calcular repo visualmente para que cuadre la fila
+                const calcRepo = fin - (ini - out);
+                const repoText = calcRepo > 0 ? `<span class="text-primary fw-bold">+${calcRepo}</span>` : '-';
+                
+                const estado = fin <= repo ? '<span class="badge bg-danger">⚠️ Reponer</span>' : '<span class="badge bg-success">OK</span>';
+                
                 bodyInv.innerHTML += `
                     <tr>
-                        <td>${sku}</td><td>${CATALOGO.skus[sku]}</td>
-                        <td>${CATALOGO.um[sku]}</td><td class="fw-bold">${cant}</td>
-                        <td>${repo}</td><td>${estado}</td>
+                        <td class="fw-bold">${sku}</td>
+                        <td>${CATALOGO.skus[sku]}</td>
+                        <td>${CATALOGO.um[sku]}</td>
+                        <td class="bg-light fw-bold">${ini}</td>
+                        <td class="text-danger">-${out}</td>
+                        <td class="text-primary">${repoText}</td>
+                        <td class="bg-light fw-bold text-dark">${fin}</td>
+                        <td class="text-muted"><small>${repo}</small></td>
+                        <td>${estado}</td>
                     </tr>`;
             });
             
             const repoList = document.getElementById('listaReposiciones');
-            const repos = data.inventario.reposiciones;
             if(Object.keys(repos).length === 0) {
                 repoList.innerHTML = '<li class="list-group-item border-0 text-muted">No hubo ingresos de mercadería hoy.</li>';
             } else {
@@ -324,7 +359,6 @@
             pickingCont.innerHTML = '';
             const pickZona = {};
             
-            // Agrupar picking
             Object.values(data.picking.pedidos_preparados).forEach(p => {
                 const z = p.zona || "General";
                 if(!pickZona[z]) pickZona[z] = {};
@@ -332,7 +366,7 @@
             });
 
             if(Object.keys(pickZona).length === 0) {
-                pickingCont.innerHTML = '<div class="col-12"><div class="alert alert-info">No hubo actividad de picking hoy.</div></div>';
+                pickingCont.innerHTML = '<div class="col-12"><div class="alert alert-info">No hubo actividad de picking hoy (o todo fue a Backlog).</div></div>';
             } else {
                 Object.entries(pickZona).forEach(([zona, prods]) => {
                     let filas = Object.entries(prods).map(([k,v]) => 
@@ -406,6 +440,7 @@
             }
         }
 
+        // --- 3. REPORTE FINAL ---
         async function cargarReporte() {
             const res = await fetch('/api/reporte');
             const data = await res.json();

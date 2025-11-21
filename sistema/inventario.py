@@ -1,127 +1,79 @@
 """
 Módulo de Inventario - Sistema de Logística FIIS SIE
-Control de inventario y reposición automática
+Control de inventario, ventas y reposición con trazabilidad completa.
 """
-
-from .catalogos import inventario_inicial, punto_reposicion, lote_reposicion
 
 def reservar_y_actualizar(stock, pedido):
     """
-    Reserva stock para un pedido y actualiza el inventario
-    
-    Args:
-        stock: Diccionario con el stock actual
-        pedido: Diccionario con los productos del pedido
-    
-    Returns:
-        Tupla (stock_actualizado, pedido_completo, faltantes)
+    Procesa un pedido descontando del stock disponible.
     """
     stock_actualizado = stock.copy()
     pedido_completo = True
     faltantes = {}
-    
+    despachado_por_sku = {} # Importante para saber cuánto salió realmente
+
+    # Validación de seguridad por si el pedido viene mal formado
+    if 'productos' not in pedido:
+        return stock, False, {}, {}
+
     for sku, cantidad_solicitada in pedido['productos'].items():
-        if sku in stock_actualizado:
-            stock_disponible = stock_actualizado[sku]
-            
-            if stock_disponible >= cantidad_solicitada:
-                stock_actualizado[sku] -= cantidad_solicitada
-            else:
-                # No hay suficiente stock
-                pedido_completo = False
-                faltantes[sku] = cantidad_solicitada - stock_disponible
-                stock_actualizado[sku] = 0  # Se agota el stock
+        stock_disponible = stock_actualizado.get(sku, 0)
+        
+        if stock_disponible >= cantidad_solicitada:
+            # Hay suficiente stock
+            stock_actualizado[sku] -= cantidad_solicitada
+            despachado_por_sku[sku] = cantidad_solicitada
         else:
-            # SKU no existe en inventario
+            # Quiebre de stock (Venta parcial)
             pedido_completo = False
-            faltantes[sku] = cantidad_solicitada
-    
-    return stock_actualizado, pedido_completo, faltantes
+            faltantes[sku] = cantidad_solicitada - stock_disponible
+            despachado_por_sku[sku] = stock_disponible # Vendemos lo que queda
+            stock_actualizado[sku] = 0
+            
+    return stock_actualizado, pedido_completo, faltantes, despachado_por_sku
 
 def reponer_simple(stock, punto_reorden, lote):
     """
-    Genera reposición automática si el stock baja del punto de reorden
-    
-    Args:
-        stock: Diccionario con el stock actual
-        punto_reorden: Diccionario con puntos de reorden por SKU
-        lote: Diccionario con tamaños de lote por SKU
-    
-    Returns:
-        Tupla (stock_actualizado, reposiciones_realizadas)
+    Verifica si el stock está bajo el mínimo y repone.
     """
     stock_actualizado = stock.copy()
     reposiciones = {}
     
-    for sku, stock_actual in stock.items():
-        if sku in punto_reorden and stock_actual < punto_reorden[sku]:
-            cantidad_reposicion = lote.get(sku, 100)  # Lote por defecto de 100
-            stock_actualizado[sku] += cantidad_reposicion
-            reposiciones[sku] = cantidad_reposicion
-    
+    for sku, cantidad in stock.items():
+        # Si el stock actual es menor o igual al punto de reposición
+        if sku in punto_reorden and cantidad <= punto_reorden[sku]:
+            qty = lote.get(sku, 100)
+            stock_actualizado[sku] += qty
+            reposiciones[sku] = qty
+            
     return stock_actualizado, reposiciones
 
-def mostrar_inventario(stock, titulo="Inventario Actual"):
+def procesar_dia_inventario(pedidos_dia, stock_inicial_dia, punto_reorden, lote):
     """
-    Muestra el estado del inventario de forma formateada
+    Orquesta el movimiento diario de inventario:
+    1. Foto Inicial -> 2. Ventas -> 3. Reposición -> 4. Foto Final
     """
-    resultado = [f"\n=== {titulo} ==="]
+    # 1. Guardar la foto del inicio del día (Antes de vender)
+    stock_al_inicio = stock_inicial_dia.copy()
     
-    for sku, cantidad in stock.items():
-        resultado.append(f"{sku}: {cantidad} unidades")
+    stock_corriente = stock_inicial_dia.copy()
+    ventas_totales_dia = {sku: 0 for sku in stock_inicial_dia}
     
-    return "\n".join(resultado)
+    # 2. Procesar todos los pedidos del día (Descontar stock)
+    for pedido in pedidos_dia.values():
+        stock_corriente, _, _, despachado = reservar_y_actualizar(stock_corriente, pedido)
+        
+        # Acumular lo vendido para el reporte
+        for sku, cant in despachado.items():
+            if sku in ventas_totales_dia:
+                ventas_totales_dia[sku] += cant
 
-def procesar_dia_inventario(pedidos_dia, stock_inicial, punto_reorden, lote):
-    """
-    Procesa todos los pedidos de un día y actualiza el inventario
-    
-    Returns:
-        Diccionario con resultados del procesamiento
-    """
-    stock_actual = stock_inicial.copy()
-    pedidos_procesados = []
-    total_unidades_despachadas = 0
-    
-    resultado = ["\n=== Procesamiento de Inventario ==="]
-    resultado.append(mostrar_inventario(stock_actual, "Inventario Inicial"))
-    
-    for pedido_id, pedido in pedidos_dia.items():
-        stock_anterior = stock_actual.copy()
-        stock_actual, pedido_completo, faltantes = reservar_y_actualizar(stock_actual, pedido)
-        
-        # Calcular unidades despachadas
-        unidades_despachadas = 0
-        for sku, cantidad in pedido['productos'].items():
-            if sku in stock_anterior:
-                despachadas = min(stock_anterior[sku], cantidad)
-                unidades_despachadas += despachadas
-                if despachadas > 0:
-                    resultado.append(f"Pedido {pedido_id} - {sku}: {despachadas} unidades despachadas (Stock restante: {stock_actual[sku]})")
-        
-        total_unidades_despachadas += unidades_despachadas
-        
-        pedidos_procesados.append({
-            'pedido_id': pedido_id,
-            'completo': pedido_completo,
-            'faltantes': faltantes,
-            'unidades_despachadas': unidades_despachadas
-        })
-    
-    # Verificar reposiciones
-    stock_final, reposiciones = reponer_simple(stock_actual, punto_reorden, lote)
-    
-    if reposiciones:
-        resultado.append("\n--- Reaprovisionamiento automático ---")
-        for sku, cantidad in reposiciones.items():
-            resultado.append(f"{sku}: +{cantidad} unidades añadidas")
-    
-    resultado.append(mostrar_inventario(stock_final, "Stock Final"))
+    # 3. Procesar Reposiciones automáticas (Al final del turno)
+    stock_final, reposiciones = reponer_simple(stock_corriente, punto_reorden, lote)
     
     return {
-        'stock_final': stock_final,
-        'pedidos_procesados': pedidos_procesados,
-        'reposiciones': reposiciones,
-        'total_unidades_despachadas': total_unidades_despachadas,
-        'log': "\n".join(resultado)
+        'stock_inicial': stock_al_inicio,  # Dato clave para tu tabla
+        'ventas': ventas_totales_dia,      # Dato clave para saber cuánto salió
+        'reposiciones': reposiciones,      # Dato clave para saber cuánto entró
+        'stock_final': stock_final         # Dato clave para el día siguiente
     }

@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logística FIIS SIE - PC3</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root { --primary: #2c3e50; --sec: #3498db; --bg: #f0f2f5; }
+        body { background-color: var(--bg); font-family: 'Segoe UI', sans-serif; }
+        .navbar { background-color: var(--primary); box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .card { border: none; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-radius: 8px; margin-bottom: 1rem; }
+        .card-header { font-weight: bold; color: white; }
+        
+        /* Colores de Cabeceras por Zona */
+        .bg-zona { background-color: #6c757d; }
+        
+        /* KPIs Cards */
+        .kpi-card { padding: 1.5rem; border-radius: 10px; color: white; text-align: center; transition: transform 0.2s; }
+        .kpi-card:hover { transform: translateY(-3px); }
+        .bg-kpi-1 { background: linear-gradient(135deg, #667eea, #764ba2); }
+        .bg-kpi-2 { background: linear-gradient(135deg, #2af598, #009efd); }
+        .bg-kpi-3 { background: linear-gradient(135deg, #ff9a9e, #fecfef); color: #444; }
+        .bg-kpi-4 { background: linear-gradient(135deg, #f6d365, #fda085); color: #444; }
+        .bg-kpi-5 { background: linear-gradient(135deg, #84fab0, #8fd3f4); color: #444; }
+        
+        .nav-pills .nav-link.active { background-color: var(--sec); }
+        .loading-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.9); z-index: 9999; display: flex; justify-content: center; align-items: center; flex-direction: column; }
+        
+        /* Tablas */
+        .table-hover tbody tr:hover { background-color: rgba(52, 152, 219, 0.1); }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="#"><i class="fas fa-cubes"></i> Sistema Logística FIIS SIE</a>
+            <div class="d-flex align-items-center">
+                <div class="input-group me-3" id="diaSelectorContainer" style="display:none;">
+                    <span class="input-group-text bg-light border-0"><i class="fas fa-calendar-day"></i></span>
+                    <select class="form-select" id="diaSelector" style="max-width: 150px;"></select>
+                </div>
+                <button class="btn btn-outline-light btn-sm" onclick="resetApp()">Nueva Simulación</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        
+        <div id="configPanel" class="card p-4 text-center" style="max-width: 600px; margin: 50px auto;">
+            <h3 class="mb-4"><i class="fas fa-cogs"></i> Configuración de Simulación</h3>
+            <div class="row g-3 justify-content-center">
+                <div class="col-md-5">
+                    <label class="form-label fw-bold">Días a Simular</label>
+                    <input type="number" id="diasInput" class="form-control" value="7" min="1" max="30">
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label fw-bold">Capacidad Picking</label>
+                    <input type="number" id="capacidadInput" class="form-control" value="1500">
+                </div>
+                <div class="col-12 mt-4">
+                    <button class="btn btn-primary btn-lg px-5" onclick="ejecutarSimulacion()">
+                        <i class="fas fa-play"></i> Iniciar Simulación
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="resultadosPanel" style="display: none;">
+            
+            <ul class="nav nav-pills mb-4" id="mainTab" role="tablist">
+                <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabIndicadores">📊 Indicadores</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPedidos">📝 Pedidos (Zonas)</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabInventario">📦 Inventario</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPicking">🖐️ Picking (Zonas)</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabTransporte">🚛 Transporte (Zonas)</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabReporte">📑 Reporte Final</button></li>
+            </ul>
+
+            <div class="tab-content">
+                
+                <div class="tab-pane fade show active" id="tabIndicadores">
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-4"><div class="kpi-card bg-kpi-1"><h3>OTIF</h3><h1 id="kpiOTIF">0%</h1></div></div>
+                        <div class="col-md-4"><div class="kpi-card bg-kpi-2"><h3>Fill Rate</h3><h1 id="kpiFill">0%</h1></div></div>
+                        <div class="col-md-4"><div class="kpi-card bg-kpi-3"><h3>Backlog</h3><h1 id="kpiBacklog">0%</h1></div></div>
+                        <div class="col-md-6"><div class="kpi-card bg-kpi-4"><h3>Picking</h3><h1 id="kpiPicking">0</h1><small>unid/h</small></div></div>
+                        <div class="col-md-6"><div class="kpi-card bg-kpi-5"><h3>Uso Flota</h3><h1 id="kpiFlota">0%</h1></div></div>
+                    </div>
+                    
+                    <div class="card border-danger border-start border-4">
+                        <div class="card-header bg-white text-danger border-bottom-0"><i class="fas fa-bell"></i> ALERTAS DETECTADAS</div>
+                        <div class="card-body pt-0" id="alertasContainer"></div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="tabPedidos">
+                    <div id="pedidosZonasContainer" class="row"></div>
+                </div>
+
+                <div class="tab-pane fade" id="tabInventario">
+                    <div class="card">
+                        <div class="card-header bg-dark">Control de Stock y Reposición</div>
+                        <div class="card-body">
+                            <table class="table table-bordered align-middle">
+                                <thead class="table-light">
+                                    <tr><th>SKU</th><th>Producto</th><th>U.M.</th><th>Stock Final</th><th>Punto Repo.</th><th>Estado</th></tr>
+                                </thead>
+                                <tbody id="tablaInventario"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card mt-3 bg-light">
+                        <div class="card-body">
+                            <h6 class="card-title"><i class="fas fa-truck-loading"></i> Bitácora de Abastecimiento (Entradas del día)</h6>
+                            <ul id="listaReposiciones" class="list-group list-group-horizontal flex-wrap"></ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="tabPicking">
+                    <div id="pickingZonasContainer" class="row"></div>
+                </div>
+
+                <div class="tab-pane fade" id="tabTransporte">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5>Planificación de Distribución</h5>
+                        <span class="badge bg-success fs-5" id="costoTransporteTotal">Costo Total: S/ 0.00</span>
+                    </div>
+                    <div id="transporteZonasContainer" class="row"></div>
+                </div>
+
+                <div class="tab-pane fade" id="tabReporte">
+                    <button class="btn btn-success mb-3" onclick="cargarReporte()"><i class="fas fa-sync"></i> Actualizar Reporte Consolidado</button>
+                    <div class="card shadow-sm">
+                        <div class="card-body bg-light">
+                            <pre id="reporteTexto" style="font-family: 'Consolas', monospace; white-space: pre-wrap; font-size: 0.9rem;"></pre>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <div id="loading" class="loading-overlay" style="display:none;">
+        <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div>
+        <h4 class="mt-3 text-secondary">Procesando lógica logística...</h4>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // --- VARIABLES GLOBALES ---
+        let DATOS_GLOBALES = null;
+        
+        // Catálogo Estático para Visualización (Frontend)
+        const CATALOGO = {
+            skus: { 
+                "P001": "Lápiz Labial", "P002": "Base", "P003": "Rubor", 
+                "P004": "Máscara Pestañas", "P005": "Sombras" 
+            },
+            um: { 
+                "P001": "Cajas", "P002": "Cajas", "P003": "Cajas", 
+                "P004": "Cajas", "P005": "Cajas" 
+            },
+            repo: { 
+                "P001": 20, "P002": 30, "P003": 35, "P004": 25, "P005": 28 
+            }
+        };
+
+        // --- 1. INICIO Y API ---
+        async function ejecutarSimulacion() {
+            const dias = document.getElementById('diasInput').value;
+            const cap = document.getElementById('capacidadInput').value;
+            
+            document.getElementById('loading').style.display = 'flex';
+
+            try {
+                const res = await fetch('/api/simular', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ dias: parseInt(dias), capacidad_picking: parseInt(cap) })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    DATOS_GLOBALES = data.resultados;
+                    inicializarDashboard();
+                } else {
+                    alert("Error del servidor: " + data.error);
+                }
+            } catch (e) {
+                alert("Error de conexión: " + e);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        function inicializarDashboard() {
+            document.getElementById('configPanel').style.display = 'none';
+            document.getElementById('resultadosPanel').style.display = 'block';
+            document.getElementById('diaSelectorContainer').style.display = 'flex';
+            
+            // Llenar selector de días ordenado
+            const selector = document.getElementById('diaSelector');
+            selector.innerHTML = '';
+            
+            const keysOrdenadas = Object.keys(DATOS_GLOBALES).sort((a,b) => {
+                return parseInt(a.split('_')[1]) - parseInt(b.split('_')[1]);
+            });
+
+            keysOrdenadas.forEach(key => {
+                const diaNum = key.split('_')[1];
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.text = `Día ${diaNum}`;
+                selector.appendChild(opt);
+            });
+
+            selector.addEventListener('change', (e) => cargarDatosDia(e.target.value));
+            
+            // Cargar primer día
+            selector.value = keysOrdenadas[0];
+            cargarDatosDia(keysOrdenadas[0]);
+        }
+
+        // --- 2. CARGA DE DATOS EN PANTALLA ---
+        function cargarDatosDia(diaKey) {
+            const data = DATOS_GLOBALES[diaKey];
+            const ind = data.indicadores;
+
+            // A. KPIs
+            document.getElementById('kpiOTIF').innerText = ind.OTIF.toFixed(1) + "%";
+            document.getElementById('kpiFill').innerText = ind.Fill_Rate.toFixed(1) + "%";
+            document.getElementById('kpiBacklog').innerText = ind.Backlog_Rate.toFixed(1) + "%";
+            document.getElementById('kpiPicking').innerText = ind.Productividad_Picking.toFixed(1);
+            document.getElementById('kpiFlota').innerText = ind.Utilizacion_Flota.toFixed(1) + "%";
+
+            // Alertas
+            const alertasDiv = document.getElementById('alertasContainer');
+            if (data.alertas.length === 0) {
+                alertasDiv.innerHTML = '<div class="alert alert-success mb-0">✅ Operación normal. Sin alertas críticas.</div>';
+            } else {
+                alertasDiv.innerHTML = data.alertas.map(a => `
+                    <div class="alert alert-warning py-2 mb-2">
+                        <strong>${a.indicador}:</strong> ${a.mensaje}
+                    </div>
+                `).join('');
+            }
+
+            // B. PEDIDOS POR ZONA (DESGLOSADO LÍNEA POR LÍNEA)
+            const pedidosCont = document.getElementById('pedidosZonasContainer');
+            pedidosCont.innerHTML = '';
+            
+            // Agrupar por zona
+            const pedidosPorZona = {};
+            Object.entries(data.pedidos).forEach(([id, p]) => {
+                if(!pedidosPorZona[p.zona]) pedidosPorZona[p.zona] = [];
+                pedidosPorZona[p.zona].push({id, ...p});
+            });
+
+            Object.entries(pedidosPorZona).forEach(([zona, lista]) => {
+                let filas = "";
+                lista.forEach(p => {
+                    // Iterar productos del pedido para crear filas individuales
+                    Object.entries(p.productos).forEach(([sku, cantidad]) => {
+                        filas += `
+                        <tr>
+                            <td class="fw-bold text-primary">${p.id}</td>
+                            <td>${p.cliente}</td>
+                            <td><span class="badge bg-light text-dark border">${sku}</span></td>
+                            <td>${CATALOGO.skus[sku]}</td>
+                            <td class="text-end fw-bold">${cantidad}</td>
+                        </tr>`;
+                    });
+                });
+                
+                pedidosCont.innerHTML += `
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100 shadow-sm">
+                        <div class="card-header bg-zona text-white">
+                            <i class="fas fa-map-marker-alt"></i> ${zona}
+                        </div>
+                        <div class="card-body p-0 table-responsive" style="max-height:350px">
+                            <table class="table table-sm table-hover table-striped mb-0 align-middle">
+                                <thead class="table-light sticky-top">
+                                    <tr><th>ID Pedido</th><th>Cliente</th><th>Cód.</th><th>Producto</th><th class="text-end">Cant.</th></tr>
+                                </thead>
+                                <tbody>${filas}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>`;
+            });
+
+            // C. INVENTARIO
+            const bodyInv = document.getElementById('tablaInventario');
+            bodyInv.innerHTML = '';
+            Object.entries(data.inventario.stock_final).forEach(([sku, cant]) => {
+                const repo = CATALOGO.repo[sku];
+                const estado = cant <= repo ? '<span class="badge bg-danger">⚠️ Reponer</span>' : '<span class="badge bg-success">OK</span>';
+                bodyInv.innerHTML += `
+                    <tr>
+                        <td>${sku}</td><td>${CATALOGO.skus[sku]}</td>
+                        <td>${CATALOGO.um[sku]}</td><td class="fw-bold">${cant}</td>
+                        <td>${repo}</td><td>${estado}</td>
+                    </tr>`;
+            });
+            
+            const repoList = document.getElementById('listaReposiciones');
+            const repos = data.inventario.reposiciones;
+            if(Object.keys(repos).length === 0) {
+                repoList.innerHTML = '<li class="list-group-item border-0 text-muted">No hubo ingresos de mercadería hoy.</li>';
+            } else {
+                repoList.innerHTML = Object.entries(repos).map(([k,v]) => 
+                    `<li class="list-group-item list-group-item-success me-2 mb-2 rounded"><i class="fas fa-plus-circle"></i> ${CATALOGO.skus[k]}: <strong>+${v}</strong></li>`
+                ).join('');
+            }
+
+            // D. PICKING POR ZONA
+            const pickingCont = document.getElementById('pickingZonasContainer');
+            pickingCont.innerHTML = '';
+            const pickZona = {};
+            
+            // Agrupar picking
+            Object.values(data.picking.pedidos_preparados).forEach(p => {
+                const z = p.zona || "General";
+                if(!pickZona[z]) pickZona[z] = {};
+                Object.entries(p.productos).forEach(([k,v]) => pickZona[z][k] = (pickZona[z][k]||0)+v);
+            });
+
+            if(Object.keys(pickZona).length === 0) {
+                pickingCont.innerHTML = '<div class="col-12"><div class="alert alert-info">No hubo actividad de picking hoy.</div></div>';
+            } else {
+                Object.entries(pickZona).forEach(([zona, prods]) => {
+                    let filas = Object.entries(prods).map(([k,v]) => 
+                        `<tr><td>${CATALOGO.skus[k]}</td><td class="text-end fw-bold">${v}</td><td class="text-center"><input type="checkbox"></td></tr>`
+                    ).join('');
+                    
+                    pickingCont.innerHTML += `
+                    <div class="col-md-4 mb-4">
+                        <div class="card h-100 border-primary">
+                            <div class="card-header bg-primary text-white">${zona}</div>
+                            <div class="card-body p-0">
+                                <table class="table table-sm table-striped mb-0">
+                                    <thead><tr><th>Producto</th><th class="text-end">Total</th><th>Check</th></tr></thead>
+                                    <tbody>${filas}</tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>`;
+                });
+            }
+
+            // E. TRANSPORTE POR ZONA
+            const transCont = document.getElementById('transporteZonasContainer');
+            transCont.innerHTML = '';
+            let costoTotal = 0;
+            const rutasPorZona = {};
+            const rutas = data.transporte.rutas || [];
+            
+            rutas.forEach(r => {
+                if(!rutasPorZona[r.zona]) rutasPorZona[r.zona] = [];
+                rutasPorZona[r.zona].push(r);
+                costoTotal += r.costo;
+            });
+            
+            document.getElementById('costoTransporteTotal').innerText = `Costo Total del Día: S/ ${costoTotal.toFixed(2)}`;
+
+            if(rutas.length === 0) {
+                transCont.innerHTML = '<div class="col-12"><div class="alert alert-secondary">No hay rutas programadas.</div></div>';
+            } else {
+                Object.entries(rutasPorZona).forEach(([zona, listaRutas]) => {
+                    let filas = listaRutas.map(r => {
+                        const ids = Array.isArray(r.pedidos_ids) ? r.pedidos_ids.join(', ') : r.pedidos_ids;
+                        const barraColor = r.utilizacion > 90 ? 'bg-danger' : (r.utilizacion > 70 ? 'bg-success' : 'bg-warning');
+                        
+                        return `<tr>
+                            <td><span class="badge bg-dark px-3 py-2">${r.vehiculo}</span></td>
+                            <td>
+                                <div class="d-flex justify-content-between mb-1"><small>${r.unidades}/${r.capacidad_max}</small> <small>${r.utilizacion.toFixed(1)}%</small></div>
+                                <div class="progress" style="height: 6px;"><div class="progress-bar ${barraColor}" style="width: ${r.utilizacion}%"></div></div>
+                            </td>
+                            <td><small class="text-muted text-wrap" style="font-size:0.8rem;">${ids}</small></td>
+                            <td class="fw-bold text-end">S/ ${r.costo.toFixed(2)}</td>
+                        </tr>`;
+                    }).join('');
+
+                    transCont.innerHTML += `
+                    <div class="col-md-12 mb-4">
+                        <div class="card shadow-sm">
+                            <div class="card-header bg-secondary text-white">
+                                <i class="fas fa-truck"></i> Destino: ${zona}
+                            </div>
+                            <div class="card-body p-0 table-responsive">
+                                <table class="table table-hover mb-0 align-middle">
+                                    <thead class="table-light"><tr><th width="15%">Vehículo</th><th width="20%">Carga</th><th>Pedidos a Bordo</th><th width="15%" class="text-end">Costo</th></tr></thead>
+                                    <tbody>${filas}</tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>`;
+                });
+            }
+        }
+
+        async function cargarReporte() {
+            const res = await fetch('/api/reporte');
+            const data = await res.json();
+            document.getElementById('reporteTexto').textContent = data.reporte || "No se pudo generar el reporte.";
+        }
+
+        async function resetApp() {
+            await fetch('/api/reset', {method: 'POST'});
+            location.reload();
+        }
+    </script>
+</body>
+</html>
